@@ -32,5 +32,5 @@ def postData():
     return jsonify({'message': "New User added"})
 
 
-if __name__ == '__main__':
-    app.run()
+# if __name__ == '__main__':
+#     app.run()
