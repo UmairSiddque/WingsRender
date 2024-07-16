@@ -30,3 +30,23 @@ def postData():
     db.session.add(newUserDetails)
     db.session.commit()  # Don't forget to commit the transaction
     return jsonify({'message': "New User added"})
+
+@app.route('/sign-in', methods=['POST'])
+def sign_in():
+    data = request.get_json() 
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({'error': 'Email and password are required'}), 400
+
+    user = Task.query.filter_by(email=email).first()
+
+    if user and check_password_hash(user.password, password):
+        return jsonify({'message': 'Sign in successful'}), 200
+    else:
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+
+# if __name__ == '__main__':
+#     app.run()
