@@ -33,19 +33,26 @@ def postData():
 
 @app.route('/sign-in', methods=['POST'])
 def sign_in():
-    data = request.get_json() 
-    email = data.get('email')
-    password = data.get('password')
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
 
-    if not email or not password:
-        return jsonify({'error': 'Email and password are required'}), 400
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
 
-    user = Task.query.filter_by(email=email).first()
+        user = Task.query.filter_by(email=email).first()
 
-    if user and check_password_hash(user.password, password):
-        return jsonify({'message': 'Sign in successful'}), 200
-    else:
-        return jsonify({'error': 'Invalid credentials'}), 401
+        if user:
+            if password == user.password:  # Compare passwords directly
+                return jsonify({'message': 'Sign in successful'}), 200
+            else:
+                return jsonify({'error': 'Invalid credentials'}), 401
+        else:
+            return jsonify({'error': 'Invalid credentials'}), 401
+
+    except Exception as e:
+        return jsonify({'error': 'Internal Server Error'}), 500
     
 
 # if __name__ == '__main__':
