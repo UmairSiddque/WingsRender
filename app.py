@@ -1,9 +1,13 @@
-from flask import Flask, jsonify, request
+from datetime import datetime
+import re
+from flask import Flask, jsonify, request, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, join_room, send, emit
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://wings_render_database_user:LEPEFJsnwID4c5kMiRYjxcAEVTqYu1jj@dpg-cqamrv0gph6c73f6qbsg-a.oregon-postgres.render.com/wings_render_database'
 
+socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
 class Task(db.Model):
@@ -11,6 +15,18 @@ class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     email = db.Column(db.String(200), unique=True,nullable=False)
     password = db.Column(db.String, nullable=False)
+
+
+class Message(db.Model):
+    __tablename__ = 'messages'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    sender = db.relationship('Task', foreign_keys=[sender_id], backref=db.backref('sent_messages', lazy=True))
+    receiver = db.relationship('Task', foreign_keys=[receiver_id], backref=db.backref('received_messages', lazy=True))
 
 
 class UserData(db.Model):
@@ -51,10 +67,15 @@ def postData():
         if not new_email or not new_password:
             return jsonify({'error': 'Email and password are required'}), 400
 
+        # Validate email format
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(email_regex, new_email):
+            return jsonify({'message': 'Invalid email format'}), 400
+
         # Check if the email already exists
         existing_user = Task.query.filter_by(email=new_email).first()
         if existing_user:
-            return jsonify({'error': 'Email already exists'}), 400
+            return jsonify({'message': 'Email already exists'}), 400
 
         # Create new user
         newUserDetails = Task(email=new_email, password=new_password)
@@ -118,8 +139,7 @@ def postUserData():
 
     except Exception as e:
         return jsonify({'error': 'Internal Server Error'}), 500
-
-
+    
     
 
 
@@ -140,12 +160,69 @@ def sign_in():
             if password == user.password:  # Compare passwords directly
                 return jsonify({'message': 'Sign in successful'}), 200
             else:
-                return jsonify({'error': 'Invalid credentials'}), 401
+                return jsonify({'message': 'Invalid credentials'}), 401
         else:
-            return jsonify({'error': 'Invalid credentials'}), 401
+            return jsonify({'message': 'Invalid credentials'}), 401
 
     except Exception as e:
         return jsonify({'error': 'Internal Server Error'}), 500
+
+
+
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    sender_id = request.form.get('sender_id')
+    receiver_id = request.form.get('receiver_id')
+    message = request.form.get('message')
+
+    # Check if any of the fields are missing
+    if not sender_id or not receiver_id or not message:
+        return jsonify({'error': 'Missing data'}), 400
+
+    # Store the message in the database
+    new_message = Message(sender_id=sender_id, receiver_id=receiver_id, message=message)
+    db.session.add(new_message)
+    db.session.commit()
+
+    # Emit the message to the receiver's room
+    socketio.emit('receive_message', {'sender_id': sender_id, 'receiver_id': receiver_id, 'message': message}, room=receiver_id)
+    return jsonify({'status': 'Message sent'})
+
+@socketio.on('send_message')
+def handle_message(data):
+    sender_id = data['sender_id']
+    receiver_id = data['receiver_id']
+    message = data['message']
+
+    # Store the message in the database
+    new_message = Message(sender_id=sender_id, receiver_id=receiver_id, message=message)
+    db.session.add(new_message)
+    db.session.commit()
+
+    emit('receive_message', {'sender_id': sender_id, 'receiver_id': receiver_id, 'message': message}, room=receiver_id)
+
+@socketio.on('join')
+def on_join(data):
+    user_id = data['user_id']
+    join_room(user_id)
+    emit('status', {'msg': f'User {user_id} has entered the room.'}, room=user_id)
+    
+@app.route('/get_chats', methods=['GET'])
+def get_chats():
+    user1_id = request.args.get('user1_id')
+    user2_id = request.args.get('user2_id')
+
+    if not user1_id or not user2_id:
+        return jsonify({'error': 'Missing user IDs'}), 400
+
+    messages = Message.query.filter(
+        ((Message.sender_id == user1_id) & (Message.receiver_id == user2_id)) |
+        ((Message.sender_id == user2_id) & (Message.receiver_id == user1_id))
+    ).order_by(Message.timestamp).all()
+
+    chat_history = [{'sender_id': msg.sender_id, 'receiver_id': msg.receiver_id, 'message': msg.message, 'timestamp': msg.timestamp} for msg in messages]
+    return jsonify(chat_history)
+
     
 
 # if __name__ == '__main__':
