@@ -1,4 +1,7 @@
-Flask
-Flask-SQLAlchemy
-Gunicorn
 psycopg2
+Flask
+Gunicorn
+Flask-SQLAlchemy
+Flask-SocketIO
+python-socketio
+eventlet
