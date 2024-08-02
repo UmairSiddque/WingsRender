@@ -141,7 +141,31 @@ def postUserData():
         return jsonify({'error': 'Internal Server Error'}), 500
     
     
-
+@app.route('/userData', methods=['GET'])
+def getUserData():
+    try:
+        # Query all user details
+        userDetailsList = UserData.query.all()
+        
+        # Prepare the response data
+        users = []
+        for userDetails in userDetailsList:
+            user = {
+                'id': userDetails.user_auth_id,
+                'name': userDetails.name,
+                'email': userDetails.email,
+                'gender': userDetails.gender,
+                'hobbies': userDetails.hobbies,
+                'phone_number': userDetails.phone_number,
+                'age': userDetails.age,
+                'bio': userDetails.bio
+            }
+            users.append(user)
+        
+        return jsonify({'users': users}), 200
+    
+    except Exception as e:
+        return jsonify({'error': 'Internal Server Error'}), 500
 
 # USER SIGNIN METHOD
 @app.route('/sign-in', methods=['POST'])
