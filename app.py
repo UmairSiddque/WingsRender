@@ -40,6 +40,7 @@ class UserData(db.Model):
     phone_number = db.Column(db.String(50))
     age = db.Column(db.String(10))
     bio = db.Column(db.Text)
+    profile_image = db.Column(db.Text)
     
     user = db.relationship('Task', backref=db.backref('user_data', lazy=True))
 
@@ -90,11 +91,11 @@ def postData():
 # POSTING USER DATA TO DATABASE
 @app.route('/userData', methods=['POST'])
 def postUserData():
-    try:
+    try:  # Added closing parenthesis here
         data = request.get_json()
         newEmail = data['email']
         user = Task.query.filter_by(email=newEmail).first()
-        
+
         if not user:
             return jsonify({'error': "No User registered with this mail"}), 400
 
@@ -105,10 +106,11 @@ def postUserData():
         phone_number = data['phone_number']
         age = data['age']
         bio = data['bio']
+        profile_image = data['profile_image']
 
         # Check if user details already exist
         userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
-        
+
         if userDetails:
             # Update existing user details
             userDetails.name = name
@@ -118,6 +120,7 @@ def postUserData():
             userDetails.phone_number = phone_number
             userDetails.age = age
             userDetails.bio = bio
+            userDetails.profile_image = profile_image
             message = "Updated user details"
         else:
             # Add new user details
@@ -129,43 +132,21 @@ def postUserData():
                 hobbies=hobbies,
                 phone_number=phone_number,
                 age=age,
-                bio=bio
+                bio=bio,
+                profile_image=profile_image
             )
             db.session.add(userDetails)
             message = "Added user details"
-        
+
         db.session.commit()
         return jsonify({'message': message}), 201
 
     except Exception as e:
         return jsonify({'error': 'Internal Server Error'}), 500
-    
+
     
 @app.route('/userData', methods=['GET'])
 def getUserData():
-    try:
-        # Query all user details
-        userDetailsList = UserData.query.all()
-        
-        # Prepare the response data
-        users = []
-        for userDetails in userDetailsList:
-            user = {
-                'id': userDetails.user_auth_id,
-                'name': userDetails.name,
-                'email': userDetails.email,
-                'gender': userDetails.gender,
-                'hobbies': userDetails.hobbies,
-                'phone_number': userDetails.phone_number,
-                'age': userDetails.age,
-                'bio': userDetails.bio
-            }
-            users.append(user)
-        
-        return jsonify({'users': users}), 200
-    
-    except Exception as e:
-        return jsonify({'error': 'Internal Server Error'}), 500
 
 # USER SIGNIN METHOD
 @app.route('/sign-in', methods=['POST'])
