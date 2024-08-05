@@ -6,7 +6,6 @@ from flask_socketio import SocketIO, join_room, send, emit
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://wings_render_database_user:LEPEFJsnwID4c5kMiRYjxcAEVTqYu1jj@dpg-cqamrv0gph6c73f6qbsg-a.oregon-postgres.render.com/wings_render_database'
-
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -147,6 +146,32 @@ def postUserData():
     
 @app.route('/userData', methods=['GET'])
 def getUserData():
+    try:
+        # Query all user details
+        userDetailsList = UserData.query.all()
+        
+        # Prepare the response data
+        users = []
+        for userDetails in userDetailsList:
+            user = {
+                'id': userDetails.user_auth_id,
+                'name': userDetails.name,
+                'email': userDetails.email,
+                'gender': userDetails.gender,
+                'hobbies': userDetails.hobbies,
+                'phone_number': userDetails.phone_number,
+                'age': userDetails.age,
+                'bio': userDetails.bio,
+                'profile_image': userDetails.profile_image
+            }
+            users.append(user)
+        
+        return jsonify({'users': users}), 200
+    
+    except Exception as e:
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
 
 # USER SIGNIN METHOD
 @app.route('/sign-in', methods=['POST'])
