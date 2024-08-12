@@ -42,6 +42,11 @@ class UserData(db.Model):
     
     user = db.relationship('Task', backref=db.backref('user_data', lazy=True))
 
+class UserImages(db.Model):
+    __tablename__='userImage'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    imageString = db.Column(db.String())
 
 with app.app_context():
     db.create_all()
@@ -86,6 +91,8 @@ def postData():
         print(e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
+
+
 # POSTING USER DATA TO DATABASE
 @app.route('/userData', methods=['POST'])
 def postUserData():
@@ -104,6 +111,7 @@ def postUserData():
         phone_number = data['phone_number']
         age = data['age']
         bio = data['bio']
+      
 
         # Check if user details already exist
         userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
@@ -117,6 +125,7 @@ def postUserData():
             userDetails.phone_number = phone_number
             userDetails.age = age
             userDetails.bio = bio
+         
             message = "Updated user details"
         else:
             # Add new user details
@@ -138,6 +147,46 @@ def postUserData():
 
     except Exception as e:
         return jsonify({'error': 'Internal Server Error'}), 500
+
+@app.route('/upload_image', methods=['POST'])
+def upload_image():
+    data = request.json
+    user_auth_id = data.get('user_auth_id')
+    image_string = data.get('imageString')
+
+    if not user_auth_id or not image_string:
+        return jsonify({"error": "user_auth_id and imageString are required"}), 400
+
+    # Check if the user_auth_id exists
+    user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+
+    if user_image:
+        # Update the existing record
+        user_image.imageString = image_string
+    else:
+        # Add a new record
+        new_user_image = UserImages(user_auth_id=user_auth_id, imageString=image_string)
+        db.session.add(new_user_image)
+
+    db.session.commit()
+    
+    return jsonify({"message": "Image uploaded successfully"}), 200
+
+@app.route('/get_image/<int:user_auth_id>', methods=['GET'])
+def get_image(user_auth_id):
+    # Query the database for a single record matching the user_auth_id
+    user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+
+    if user_image:
+        # Return the image as an object
+        return jsonify({
+            "id": user_image.id,
+            "user_auth_id": user_image.user_auth_id,
+            "imageString": user_image.imageString
+        }), 200
+    else:
+        return jsonify({"error": "No image found for the given user_auth_id"}), 404
+
 
     
 @app.route('/userData', methods=['GET'])
