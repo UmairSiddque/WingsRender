@@ -43,10 +43,12 @@ class UserData(db.Model):
     user = db.relationship('Task', backref=db.backref('user_data', lazy=True))
 
 class UserImages(db.Model):
-    __tablename__='userImage'
+    __tablename__ = 'userImage'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    email = db.Column(db.String(200))  # Ensure this column exists
     imageString = db.Column(db.String())
+    user = db.relationship('Task', backref=db.backref('user_image', lazy=True))
 
 with app.app_context():
     db.create_all()
@@ -150,27 +152,46 @@ def postUserData():
 
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
-    data = request.json
-    user_auth_id = data.get('user_auth_id')
-    image_string = data.get('imageString')
+    try:
+        data = request.get_json()
+        newEmail = data['email']
+        image_string = data.get('imageString')
 
-    if not user_auth_id or not image_string:
-        return jsonify({"error": "user_auth_id and imageString are required"}), 400
+        # Ensure that email and imageString are provided
+        if not newEmail or not image_string:
+            return jsonify({"error": "Email and imageString are required"}), 400
 
-    # Check if the user_auth_id exists
-    user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+        # Get user by email
+        user = Task.query.filter_by(email=newEmail).first()
 
-    if user_image:
-        # Update the existing record
-        user_image.imageString = image_string
-    else:
-        # Add a new record
-        new_user_image = UserImages(user_auth_id=user_auth_id, imageString=image_string)
-        db.session.add(new_user_image)
+        if not user:
+            return jsonify({'error': "No User registered with this mail"}), 400
 
-    db.session.commit()
-    
-    return jsonify({"message": "Image uploaded successfully"}), 200
+        user_auth_id = user.id
+
+        # Check if an image already exists for this user
+        user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+
+        if user_image:
+            # Update existing image
+            user_image.imageString = image_string
+            message = "Updated user image"
+        else:
+            # Add new image
+            user_image = UserImages(
+                user_auth_id=user_auth_id,
+                email=newEmail,
+                imageString=image_string
+            )
+            db.session.add(user_image)
+            message = "Added new user image"
+
+        db.session.commit()
+        return jsonify({"message": message}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/get_image/<int:user_auth_id>', methods=['GET'])
 def get_image(user_auth_id):
@@ -181,11 +202,14 @@ def get_image(user_auth_id):
         # Return the image as an object
         return jsonify({
             "id": user_image.id,
+            "email":user_image.email,
             "user_auth_id": user_image.user_auth_id,
             "imageString": user_image.imageString
         }), 200
     else:
         return jsonify({"error": "No image found for the given user_auth_id"}), 404
+
+
 
 
     
