@@ -210,8 +210,6 @@ def get_image(user_auth_id):
         return jsonify({"error": "No image found for the given user_auth_id"}), 404
 
 
-
-
     
 @app.route('/userData', methods=['GET'])
 def getUserData():
