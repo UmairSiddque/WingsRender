@@ -5,7 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, join_room, send, emit
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://wings_render_database_user:LEPEFJsnwID4c5kMiRYjxcAEVTqYu1jj@dpg-cqamrv0gph6c73f6qbsg-a.oregon-postgres.render.com/wings_render_database'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://official_wings_db_1q3g_user:usySpzm5qAApcUNGZGMLdSltem2IpXyb@dpg-cr4p7j52ng1s73e4vavg-a.frankfurt-postgres.render.com/official_wings_db_1q3g'
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
