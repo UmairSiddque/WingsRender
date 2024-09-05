@@ -267,41 +267,75 @@ def sign_in():
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
-    sender_id = request.form.get('sender_id')
-    receiver_id = request.form.get('receiver_id')
+    sender_email = request.form.get('sender_email')
+    receiver_email = request.form.get('receiver_email')
     message = request.form.get('message')
 
     # Check if any of the fields are missing
-    if not sender_id or not receiver_id or not message:
+    if not sender_email or not receiver_email or not message:
         return jsonify({'error': 'Missing data'}), 400
 
+    # Look up user IDs based on emails
+    sender = Task.query.filter_by(email=sender_email).first()
+    receiver = Task.query.filter_by(email=receiver_email).first()
+
+    if not sender or not receiver:
+        return jsonify({'error': 'Sender or receiver not found'}), 404
+
     # Store the message in the database
-    new_message = Message(sender_id=sender_id, receiver_id=receiver_id, message=message)
+    new_message = Message(sender_id=sender.id, receiver_id=receiver.id, message=message)
     db.session.add(new_message)
     db.session.commit()
 
-    # Emit the message to the receiver's room
-    socketio.emit('receive_message', {'sender_id': sender_id, 'receiver_id': receiver_id, 'message': message}, room=receiver_id)
+    # Emit the message to the receiver's room using receiver's email
+    socketio.emit('receive_message', {
+        'sender_email': sender_email,
+        'receiver_email': receiver_email,
+        'message': message
+    }, room=receiver_email)
+
     return jsonify({'status': 'Message sent'})
+
 
 @socketio.on('send_message')
 def handle_message(data):
-    sender_id = data['sender_id']
-    receiver_id = data['receiver_id']
+    sender_email = data['sender_email']
+    receiver_email = data['receiver_email']
     message = data['message']
 
+    # Look up user IDs based on emails
+    sender = Task.query.filter_by(email=sender_email).first()
+    receiver = Task.query.filter_by(email=receiver_email).first()
+
+    if not sender or not receiver:
+        emit('error', {'error': 'Sender or receiver not found'})
+        return
+
     # Store the message in the database
-    new_message = Message(sender_id=sender_id, receiver_id=receiver_id, message=message)
+    new_message = Message(sender_id=sender.id, receiver_id=receiver.id, message=message)
     db.session.add(new_message)
     db.session.commit()
 
-    emit('receive_message', {'sender_id': sender_id, 'receiver_id': receiver_id, 'message': message}, room=receiver_id)
+    # Emit the message to the receiver's room using receiver's email
+    emit('receive_message', {
+        'sender_email': sender_email,
+        'receiver_email': receiver_email,
+        'message': message
+    }, room=receiver_email)
+
 
 @socketio.on('join')
 def on_join(data):
-    user_id = data['user_id']
-    join_room(user_id)
-    emit('status', {'msg': f'User {user_id} has entered the room.'}, room=user_id)
+    user_email = data['user_email']
+    user = Task.query.filter_by(email=user_email).first()
+
+    if not user:
+        emit('error', {'error': 'User not found'})
+        return
+
+    join_room(user_email)  # Join the room based on email
+    emit('status', {'msg': f'User {user_email} has entered the room.'}, room=user_email)
+
     
 @app.route('/get_chats', methods=['GET'])
 def get_chats():
