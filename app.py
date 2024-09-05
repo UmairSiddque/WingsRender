@@ -305,18 +305,28 @@ def on_join(data):
     
 @app.route('/get_chats', methods=['GET'])
 def get_chats():
-    user1_id = request.args.get('user1_id')
-    user2_id = request.args.get('user2_id')
+    email1 = request.args.get('email1')
+    email2 = request.args.get('email2')
 
-    if not user1_id or not user2_id:
-        return jsonify({'error': 'Missing user IDs'}), 400
+    if not email1 or not email2:
+        return jsonify({'error': 'Missing email addresses'}), 400
 
+    # Retrieve user IDs based on the provided emails
+    user1 = Task.query.filter_by(email=email1).first()
+    user2 = Task.query.filter_by(email=email2).first()
+
+    if not user1 or not user2:
+        return jsonify({'error': 'One or both users not found'}), 404
+
+    # Fetch the chat history between the two users
     messages = Message.query.filter(
-        ((Message.sender_id == user1_id) & (Message.receiver_id == user2_id)) |
-        ((Message.sender_id == user2_id) & (Message.receiver_id == user1_id))
+        ((Message.sender_id == user1.id) & (Message.receiver_id == user2.id)) |
+        ((Message.sender_id == user2.id) & (Message.receiver_id == user1.id))
     ).order_by(Message.timestamp).all()
 
+    # Prepare the chat history for response
     chat_history = [{'sender_id': msg.sender_id, 'receiver_id': msg.receiver_id, 'message': msg.message, 'timestamp': msg.timestamp} for msg in messages]
+
     return jsonify(chat_history)
 
     
