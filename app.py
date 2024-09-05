@@ -324,10 +324,21 @@ def get_chats():
         ((Message.sender_id == user2.id) & (Message.receiver_id == user1.id))
     ).order_by(Message.timestamp).all()
 
-    # Prepare the chat history for response
-    chat_history = [{'sender_id': msg.sender_id, 'receiver_id': msg.receiver_id, 'message': msg.message, 'timestamp': msg.timestamp} for msg in messages]
+    # Prepare the chat history for response, adding sender and receiver emails
+    chat_history = [
+        {
+            'sender_id': msg.sender_id,
+            'sender_email': user1.email if msg.sender_id == user1.id else user2.email,
+            'receiver_id': msg.receiver_id,
+            'receiver_email': user2.email if msg.receiver_id == user2.id else user1.email,
+            'message': msg.message,
+            'timestamp': msg.timestamp
+        }
+        for msg in messages
+    ]
 
     return jsonify(chat_history)
+
 
     
 
