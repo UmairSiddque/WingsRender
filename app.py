@@ -1,13 +1,30 @@
 from datetime import datetime
 import re
-from flask import Flask, jsonify, request, session
+from flask import Flask, jsonify, request, session,send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, join_room, send, emit
+import os
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://official_wings_db_1q3g_user:usySpzm5qAApcUNGZGMLdSltem2IpXyb@dpg-cr4p7j52ng1s73e4vavg-a.frankfurt-postgres.render.com/official_wings_db_1q3g'
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
+
+# Set the upload folder configuration
+app.config['UPLOAD_FOLDER'] = 'uploads'
+
+# Ensure the uploads folder exists
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+
+UPLOAD_FOLDER = 'uploads/'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Check if the file extension is allowed
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 class Task(db.Model):
     __tablename__ = 'userdetails'
@@ -153,45 +170,65 @@ def postUserData():
 @app.route('/upload_image', methods=['POST'])
 def upload_image():
     try:
-        data = request.get_json()
-        newEmail = data['email']
-        image_string = data.get('imageString')
-
-        # Ensure that email and imageString are provided
-        if not newEmail or not image_string:
-            return jsonify({"error": "Email and imageString are required"}), 400
-
-        # Get user by email
-        user = Task.query.filter_by(email=newEmail).first()
+        # Check if the request contains a file
+        if 'image' not in request.files:
+            return jsonify({"error": "No image file provided"}), 400
+        
+        file = request.files['image']
+        new_email = request.form.get('email')
+        
+        # Check if email is provided
+        if not new_email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        user = Task.query.filter_by(email=new_email).first()
 
         if not user:
-            return jsonify({'error': "No User registered with this mail"}), 400
+            return jsonify({'error': "No user registered with this email"}), 400
 
         user_auth_id = user.id
 
-        # Check if an image already exists for this user
-        user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+        # Check if the file is allowed
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            
+            # Save the file in the 'uploads' folder
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            
+            # Check if an image already exists for this user
+            user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
 
-        if user_image:
-            # Update existing image
-            user_image.imageString = image_string
-            message = "Updated user image"
+            if user_image:
+                # Update existing image
+                user_image.imageString = filename
+                message = "Updated user image"
+            else:
+                # Add new image
+                user_image = UserImages(
+                    user_auth_id=user_auth_id,
+                    email=new_email,
+                    imageString=filename
+                )
+                db.session.add(user_image)
+                message = "Added new user image"
+            
+            db.session.commit()
+
+            # Generate the image URL
+            image_url = request.host_url + 'uploads/' + filename
+            return jsonify({"message": message, "image_url": image_url}), 201
+        
         else:
-            # Add new image
-            user_image = UserImages(
-                user_auth_id=user_auth_id,
-                email=newEmail,
-                imageString=image_string
-            )
-            db.session.add(user_image)
-            message = "Added new user image"
-
-        db.session.commit()
-        return jsonify({"message": message}), 201
-
+            return jsonify({"error": "Invalid image format"}), 400
+    
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/get_image/<int:user_auth_id>', methods=['GET'])
 def get_image(user_auth_id):
@@ -220,6 +257,14 @@ def getUserData():
         # Prepare the response data
         users = []
         for userDetails in userDetailsList:
+            user_image = UserImages.query.filter_by(user_auth_id=userDetails.user_auth_id).first()
+            
+            # If user has an image, generate the image URL
+            if user_image and user_image.imageString:
+                image_url = request.host_url + 'uploads/' + user_image.imageString
+            else:
+                image_url = None  # No image available
+
             user = {
                 'id': userDetails.user_auth_id,
                 'name': userDetails.name,
@@ -228,7 +273,8 @@ def getUserData():
                 'hobbies': userDetails.hobbies,
                 'phone_number': userDetails.phone_number,
                 'age': userDetails.age,
-                'bio': userDetails.bio
+                'bio': userDetails.bio,
+                'image_url': image_url  # Include the image URL in the response
             }
             users.append(user)
         
@@ -236,6 +282,7 @@ def getUserData():
     
     except Exception as e:
         return jsonify({'error': 'Internal Server Error'}), 500
+
 
 
 
